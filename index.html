@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>대한민국 국군의 심장: C4I 지휘통제체계</title>
+    <!-- Chosen Palette: Navy/Gray Tones (#111827, #374151, #e5e7eb) with point colors for each service (Army-Green: #16a34a, Navy-Blue: #2563eb, Air Force-Sky Blue: #0284c7) -->
+    <!-- Application Structure Plan: 본 SPA는 PRD의 선형적 구조를 넘어, 사용자의 능동적 탐색을 유도하는 허브-앤-스포크(Hub-and-Spoke) 모델을 채택합니다. 중앙 허브에서는 각 군의 C4I 체계가 어떻게 합동 체계(KJCCS)와 연결되는지를 시각적으로 보여주는 대화형 다이어그램을 제공합니다. 사용자는 이 다이어그램의 각 노드(육군, 해군, 공군, 합동)를 클릭하여 해당 시스템의 상세 정보를 동적으로 로드할 수 있습니다. 이는 사용자가 각 군의 체계를 독립적으로 학습하는 것이 아니라, 전체적인 합동성의 맥락 안에서 이해하도록 돕습니다. 이 구조는 정보의 위계를 명확히 하고, 긴 스크롤 없이도 원하는 정보에 빠르게 접근하게 하여 사용자 경험을 극대화합니다. -->
+    <!-- Visualization & Content Choices: 
+        - PRD F-01 (C4I 개념): 목표: 개념의 구성 요소 분해 및 설명. 방법: 5개 구성요소(C,C,C,C,I)를 나타내는 클릭 가능한 카드. 상호작용: 클릭 시 해당 요소의 설명이 동적으로 표시됨. 정당성: 텍스트 나열보다 능동적인 학습을 유도. (HTML/CSS/JS)
+        - PRD F-02,03,04,05 (각 군/합동 C4I): 목표: 각 시스템의 역할과 상호연결성 시각화. 방법: 육/해/공/합동 체계를 연결하는 중앙 집중형 다이어그램. 상호작용: 각 군 아이콘 클릭 시 해당 C4I 시스템(ATCIS, KNCCS 등)의 상세 정보가 전용 영역에 표시됨. 정당성: 개별 시스템을 전체 구조 안에서 맥락적으로 이해하도록 도움. (HTML/CSS/JS)
+        - PRD F-06 (미래 C4I): 목표: 미래 기술 동향 정보 제공. 방법: AI, 클라우드, MADC 등을 나타내는 정보 카드 그리드. 상호작용: 카드 호버 시 추가 정보가 담긴 툴팁 표시. 정당성: 복잡한 미래 개념을 시각적으로 매력적이고 소화하기 쉬운 형태로 제공.
+        - PRD F-08 (데이터 시각화): 목표: 정보량 증가에 따른 AI의 필요성 강조. 방법: 전통적 방식과 AI 방식의 정보 처리 능력 비교 막대 차트. 상호작용: 차트 바에 호버 시 상세 데이터 표시. 정당성: 텍스트 설명보다 AI의 효용성을 직관적으로 전달. (Chart.js)
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; background-color: #f3f4f6; color: #1f2937; }
+        html { scroll-behavior: smooth; }
+        .nav-link { transition: color 0.3s, border-bottom-color 0.3s; }
+        .nav-link.active, .nav-link:hover { color: #2563eb; border-bottom-color: #2563eb; }
+        .card { transition: transform 0.3s, box-shadow 0.3s; }
+        .card:hover { transform: translateY(-5px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1); }
+        .component-card.active { transform: scale(1.05); border-color: #2563eb; background-color: #eff6ff; }
+        .service-node { transition: transform 0.3s, box-shadow 0.3s, background-color 0.3s; z-index: 10;}
+        .service-node.active { transform: scale(1.1); background-color: #2563eb; color: white; box-shadow: 0 0 20px rgba(37, 99, 235, 0.6); }
+        .service-node.active span { color: white !important; }
+        .chart-container { position: relative; width: 100%; max-width: 700px; margin-left: auto; margin-right: auto; height: 350px; max-height: 400px; }
+        .fade-in { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .hub-line { position: absolute; background-color: #d1d5db; transform-origin: center center; z-index: 1;}
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <header class="bg-white/90 backdrop-blur-lg sticky top-0 z-50 shadow-md">
+        <nav class="container mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <h1 class="text-xl font-bold text-gray-800">대한민국 C4I 지휘통제체계</h1>
+                <div class="hidden md:flex items-center space-x-8">
+                    <a href="#intro" class="nav-link text-gray-600 font-semibold border-b-2 border-transparent pb-1">C4I란?</a>
+                    <a href="#systems" class="nav-link text-gray-600 font-semibold border-b-2 border-transparent pb-1">국군 C4I</a>
+                    <a href="#future" class="nav-link text-gray-600 font-semibold border-b-2 border-transparent pb-1">미래</a>
+                </div>
+                <div class="md:hidden">
+                    <select id="mobile-nav" class="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                        <option value="#intro">C4I란?</option>
+                        <option value="#systems">국군 C4I</option>
+                        <option value="#future">미래</option>
+                    </select>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-10">
+
+        <section id="intro" class="py-16 text-center">
+            <h2 class="text-4xl lg:text-5xl font-extrabold text-gray-900 mb-4">전장의 중추신경계, C4I</h2>
+            <p class="text-lg text-gray-600 max-w-3xl mx-auto mb-12">C4I는 전장의 모든 정보를 실시간으로 연결하고 분석하여 지휘관의 눈과 귀가 되어주는 핵심 체계입니다. 아래 카드를 클릭하여 각 구성요소의 의미를 알아보세요.</p>
+            
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-4 max-w-4xl mx-auto mb-8">
+                <div class="component-card card p-4 text-center rounded-xl cursor-pointer border-2 border-gray-200 bg-white" data-component="c1"><h3 class="font-bold text-3xl">C</h3><p>Command</p></div>
+                <div class="component-card card p-4 text-center rounded-xl cursor-pointer border-2 border-gray-200 bg-white" data-component="c2"><h3 class="font-bold text-3xl">C</h3><p>Control</p></div>
+                <div class="component-card card p-4 text-center rounded-xl cursor-pointer border-2 border-gray-200 bg-white" data-component="c3"><h3 class="font-bold text-3xl">C</h3><p>Communication</p></div>
+                <div class="component-card card p-4 text-center rounded-xl cursor-pointer border-2 border-gray-200 bg-white" data-component="c4"><h3 class="font-bold text-3xl">C</h3><p>Computer</p></div>
+                <div class="component-card card p-4 text-center rounded-xl cursor-pointer border-2 border-gray-200 bg-white col-span-2 md:col-span-1" data-component="i1"><h3 class="font-bold text-3xl">I</h3><p>Intelligence</p></div>
+            </div>
+            <div id="component-display" class="bg-white p-6 rounded-xl shadow-inner min-h-[100px] max-w-3xl mx-auto text-left fade-in"></div>
+        </section>
+
+        <section id="systems" class="py-16 bg-white rounded-2xl shadow-xl">
+            <div class="text-center mb-16 px-4">
+                <h2 class="text-4xl lg:text-5xl font-extrabold text-gray-900 mb-4">육·해·공을 하나로 묶는 힘</h2>
+                <p class="text-lg text-gray-600 max-w-3xl mx-auto">대한민국 국군은 각 군의 특성에 맞는 C4I 체계를 운용하며, 이를 합동지휘통제체계(KJCCS)로 통합하여 시너지를 극대화합니다. 아래 아이콘을 클릭하여 각 군의 시스템을 확인해보세요.</p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-5 gap-8 items-center px-4">
+                <div id="diagram-container" class="lg:col-span-2 relative flex items-center justify-center h-96 lg:h-[500px] bg-gray-50 rounded-lg p-4">
+                    <div id="kjccs-hub" class="service-node absolute z-10 w-32 h-32 bg-gray-700 text-white rounded-full flex flex-col items-center justify-center cursor-pointer shadow-2xl" data-service="joint">
+                        <span class="text-2xl font-bold">합동</span>
+                        <span class="text-sm">(KJCCS)</span>
+                    </div>
+                    <div id="atcis-node" class="service-node absolute w-24 h-24 bg-white rounded-full flex flex-col items-center justify-center cursor-pointer shadow-lg" style="border: 3px solid #16a34a;" data-service="army"><span class="text-xl font-bold" style="color:#16a34a">육군</span><span class="text-xs text-gray-600">ATCIS</span></div>
+                    <div id="knccs-node" class="service-node absolute w-24 h-24 bg-white rounded-full flex flex-col items-center justify-center cursor-pointer shadow-lg" style="border: 3px solid #2563eb;" data-service="navy"><span class="text-xl font-bold" style="color:#2563eb">해군</span><span class="text-xs text-gray-600">KNCCS</span></div>
+                    <div id="afccs-node" class="service-node absolute w-24 h-24 bg-white rounded-full flex flex-col items-center justify-center cursor-pointer shadow-lg" style="border: 3px solid #0284c7;" data-service="airforce"><span class="text-xl font-bold" style="color:#0284c7">공군</span><span class="text-xs text-gray-600">AFCCS</span></div>
+                </div>
+
+                <div id="service-details-display" class="lg:col-span-3 bg-gray-50 p-8 rounded-lg min-h-[500px]"></div>
+            </div>
+        </section>
+
+        <section id="future" class="py-16">
+            <div class="text-center mb-12">
+                <h2 class="text-4xl lg:text-5xl font-extrabold text-gray-900 mb-4">더 빠르고, 더 똑똑하게: 지능형 C4I</h2>
+                <p class="text-lg text-gray-600 max-w-3xl mx-auto">미래 전장은 AI, 클라우드, 빅데이터 기술과 융합된 초연결·초지능 C4I 체계를 요구합니다. 국방혁신 4.0의 핵심, C4I의 미래를 만나보세요.</p>
+            </div>
+            <div class="grid md:grid-cols-2 lg:grid-cols-2 gap-8">
+                 <div class="card bg-white p-8 rounded-xl shadow-lg">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">✨ AI 기반 지능형 C4I</h3>
+                    <ul class="space-y-3 text-gray-600">
+                        <li class="flex items-start"><span class="text-blue-500 font-bold mr-3 mt-1">✓</span>AI가 방대한 전장 데이터를 분석하여 위협을 예측하고 최적의 대응 방안을 지휘관에게 추천합니다.</li>
+                        <li class="flex items-start"><span class="text-blue-500 font-bold mr-3 mt-1">✓</span>'센서-결심-타격'의 모든 과정을 자동화하고 지능화하여 의사결정 속도를 획기적으로 단축합니다.</li>
+                    </ul>
+                </div>
+                <div class="card bg-white p-6 rounded-xl shadow-lg flex flex-col justify-center">
+                    <h3 class="text-xl font-bold mb-4 text-center text-gray-800">폭증하는 정보, AI의 필요성</h3>
+                    <div class="chart-container">
+                        <canvas id="data-volume-chart"></canvas>
+                    </div>
+                </div>
+                <div class="card bg-white p-8 rounded-xl shadow-lg">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">☁️ 클라우드와 전영역지휘통제</h3>
+                    <ul class="space-y-3 text-gray-600">
+                        <li class="flex items-start"><span class="text-blue-500 font-bold mr-3 mt-1">✓</span>클라우드 기술을 통해 언제 어디서든 필요한 정보에 접근하고, 유연하게 시스템을 확장합니다.</li>
+                         <li class="flex items-start"><span class="text-blue-500 font-bold mr-3 mt-1">✓</span>지상, 해상, 공중을 넘어 우주, 사이버까지 모든 영역을 통합하는 전영역지휘통제(MADC)로 발전합니다.</li>
+                    </ul>
+                </div>
+                 <div class="card bg-white p-8 rounded-xl shadow-lg">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">🔗 Link-K: 군의 통역사</h3>
+                    <p class="text-gray-600">Link-K는 대한민국 독자 기술로 개발된 합동전술데이터링크입니다. 육·해·공군의 서로 다른 시스템들이 KJCCS를 통해 원활히 '대화'할 수 있도록 하는 표준 통신 규약으로, 합동 작전의 핵심입니다.</p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="bg-gray-800 text-white mt-16">
+        <div class="container mx-auto py-8 px-6 text-center text-sm">
+            <p>&copy; 2025 대한민국 C4I 체계 인터랙티브 가이드</p>
+            <p class="mt-2 text-gray-400">본 페이지는 국방부, 방위사업청 등 공개 자료를 기반으로 제작된 정보 제공용 콘텐츠입니다.</p>
+        </div>
+    </footer>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const componentData = {
+            c1: { title: '지휘 (Command)', content: '지휘관이 임무 달성을 위해 권한을 행사하고 방향을 제시하는 행위입니다. 계획 수립, 지시, 전반적인 통제를 포함합니다.' },
+            c2: { title: '통제 (Control)', content: '지휘관의 의도에 따라 임무가 완수되도록 부대와 자원을 체계적으로 감독하고 조정하는 과정입니다.' },
+            c3: { title: '통신 (Communication)', content: '전장의 모든 요소가 정보를 안전하고 신속하게 주고받는 혈관입니다. 강력하고 안정적인 네트워크가 필수적입니다.' },
+            c4: { title: '컴퓨터 (Computer)', content: '방대한 정보를 수집, 처리, 저장, 분석, 시각화하는 두뇌입니다. 지휘관의 상황 인식을 돕습니다.' },
+            i1: { title: '정보 (Intelligence)', content: '적, 환경, 아군에 대한 데이터를 분석하여 가치 있는 ‘정보’로 만드는 과정입니다. 정확한 정보는 불확실성을 줄이고 승리의 기반이 됩니다.' }
+        };
+
+        const serviceData = {
+            army: { title: '지상전의 두뇌, 육군 ATCIS', name: '육군전술지휘정보체계', color: 'green', icon: '🛡️', description: '지상 전장의 아군/적군 위치, 지형, 화력 등 모든 상황을 전자지도 위에 실시간으로 시각화하여 지휘관에게 제공합니다.', features: ['실시간 전장 상황 파악', '작전 계획 수립 및 명령 하달', '타격 명령 자동화 지원'] },
+            navy: { title: '바다의 지휘소, 해군 KNCCS', name: '해군지휘통제체계', color: 'blue', icon: '⚓', description: '수상함, 잠수함, 항공기 등 해군의 모든 전력을 네트워크로 연결하여 통합된 해상 작전 상황도를 생성하고 공유합니다.', features: ['함대 기동 지휘', '대함/대공/대잠전 통제', '해상 위협 실시간 평가'] },
+            airforce: { title: '영공의 파수꾼, 공군 AFCCS', name: '공군지휘통제체계', color: 'sky', icon: '✈️', description: 'MCRC(중앙방공통제소)를 중심으로 레이더 정보를 통합하여 적기를 식별/추적하고, 전투기 출격 및 요격 임무를 통제합니다.', features: ['방공작전 통제', '항공 자산 관리', '실시간 공중 위협 분석'] },
+            joint: { title: '육·해·공을 하나로, 합동 KJCCS', name: '합동지휘통제체계', color: 'gray', icon: '🤝', description: '각 군의 C4I(ATCIS, KNCCS, AFCCS) 정보를 융합하여 합참의장에게 단일화된 전장 상황을 제공, 합동 작전을 지휘하는 컨트롤 타워입니다.', features: ['통합 전장 상황도 제공', '합동 작전 계획 및 실행', 'Link-K를 통한 상호운용성 보장'] }
+        };
+
+        const componentCards = document.querySelectorAll('.component-card');
+        const componentDisplay = document.getElementById('component-display');
+        function updateComponentInfo(key) {
+            const data = componentData[key];
+            componentDisplay.innerHTML = `<div class="fade-in"><h4 class="font-bold text-xl mb-2 text-gray-800">${data.title}</h4><p class="text-gray-600">${data.content}</p></div>`;
+            componentCards.forEach(card => card.classList.remove('active'));
+            document.querySelector(`.component-card[data-component="${key}"]`).classList.add('active');
+        }
+        componentCards.forEach(card => card.addEventListener('click', () => updateComponentInfo(card.dataset.component)));
+        updateComponentInfo('c1'); 
+
+        const serviceNodes = document.querySelectorAll('.service-node');
+        const serviceDisplay = document.getElementById('service-details-display');
+        const colors = { green: { bg: 'bg-green-100', border: 'border-green-500', text: 'text-green-700' }, blue: { bg: 'bg-blue-100', border: 'border-blue-500', text: 'text-blue-700' }, sky: { bg: 'bg-sky-100', border: 'border-sky-500', text: 'text-sky-700' }, gray: { bg: 'bg-gray-100', border: 'border-gray-500', text: 'text-gray-700' }};
+        function updateServiceInfo(key) {
+            const data = serviceData[key];
+            const colorTheme = colors[data.color];
+            let featuresHtml = data.features.map(feature => `<li class="flex items-center"><span class="w-2 h-2 rounded-full ${colorTheme.bg.replace('-100', '-500')} mr-3"></span>${feature}</li>`).join('');
+            serviceDisplay.innerHTML = `<div class="fade-in h-full flex flex-col"><div class="flex items-center mb-4"><span class="text-5xl mr-4">${data.icon}</span><div><h3 class="text-3xl font-bold ${colorTheme.text}">${data.title}</h3><p class="font-semibold text-gray-600">${data.name}</p></div></div><p class="text-gray-700 mb-6 flex-grow">${data.description}</p><div class="p-4 rounded-lg ${colorTheme.bg} border-l-4 ${colorTheme.border}"><h5 class="font-bold mb-2 ${colorTheme.text}">주요 기능</h5><ul class="space-y-2 text-gray-600">${featuresHtml}</ul></div></div>`;
+            serviceNodes.forEach(node => node.classList.remove('active'));
+            document.querySelector(`.service-node[data-service="${key}"]`).classList.add('active');
+        }
+        serviceNodes.forEach(node => node.addEventListener('click', () => updateServiceInfo(node.dataset.service)));
+        updateServiceInfo('joint');
+        
+        const diagramContainer = document.getElementById('diagram-container');
+        const hub = document.getElementById('kjccs-hub');
+        const nodes = { army: document.getElementById('atcis-node'), navy: document.getElementById('knccs-node'), airforce: document.getElementById('afccs-node') };
+        
+        function positionNodesAndDrawLines() {
+            diagramContainer.querySelectorAll('.hub-line').forEach(line => line.remove());
+            const containerRect = diagramContainer.getBoundingClientRect();
+            if (containerRect.width === 0) return; 
+
+            const isMobile = window.innerWidth < 1024;
+            const radius = isMobile ? containerRect.width * 0.35 : containerRect.height * 0.38;
+            const hubCenter = { x: containerRect.width / 2, y: containerRect.height / 2 };
+            
+            Object.values(nodes).forEach((node, index) => {
+                const angle = (index * 120 - 90) * (Math.PI / 180); // -90 to start from top
+                const x = hubCenter.x + radius * Math.cos(angle) - node.offsetWidth / 2;
+                const y = hubCenter.y + radius * Math.sin(angle) - node.offsetHeight / 2;
+                node.style.left = `${x}px`;
+                node.style.top = `${y}px`;
+
+                const lineAngle = angle * (180 / Math.PI);
+                const line = document.createElement('div');
+                line.className = 'hub-line h-1';
+                line.style.width = `${radius - (hub.offsetWidth/2)}px`;
+                line.style.left = `${hubCenter.x}px`;
+                line.style.top = `${hubCenter.y}px`;
+                line.style.transform = `rotate(${lineAngle}deg)`;
+                line.style.transformOrigin = 'left center';
+                diagramContainer.prepend(line);
+            });
+        }
+        
+        positionNodesAndDrawLines();
+        window.addEventListener('resize', positionNodesAndDrawLines);
+
+        const dataVolumeCtx = document.getElementById('data-volume-chart').getContext('2d');
+        new Chart(dataVolumeCtx, {
+            type: 'bar',
+            data: { labels: ['과거 시스템', '미래 AI 시스템'], datasets: [{ label: '정보 처리 능력 (상대값)', data: [25, 95], backgroundColor: ['rgba(107, 114, 128, 0.6)', 'rgba(37, 99, 235, 0.6)'], borderColor: ['#6b7280', '#2563eb'], borderWidth: 2 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100 } } }
+        });
+
+        const navLinks = document.querySelectorAll('.nav-link');
+        const sections = document.querySelectorAll('main section');
+        const mobileNav = document.getElementById('mobile-nav');
+        const observer = new IntersectionObserver(entries => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const id = entry.target.id;
+                    navLinks.forEach(link => link.classList.toggle('active', link.getAttribute('href') === `#${id}`));
+                    if (mobileNav.value !== `#${id}`) mobileNav.value = `#${id}`;
+                }
+            });
+        }, { rootMargin: '-50% 0px -50% 0px' });
+        sections.forEach(section => observer.observe(section));
+        mobileNav.addEventListener('change', (e) => {
+             const targetId = e.target.value;
+             const targetElement = document.querySelector(targetId);
+             if (targetElement) {
+                targetElement.scrollIntoView({behavior: 'smooth'});
+             }
+        });
+    });
+    </script>
+</body>
+</html>
